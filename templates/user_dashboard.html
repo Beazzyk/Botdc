@@ -56,14 +56,16 @@
             <div class="card-body">
                 <h5 class="card-title">Twój Panel</h5>
                 <p>Twoja subskrypcja: {{ 'Aktywna' if subscribed else 'Nieaktywna' }}</p>
-                <p>Jeśli chcesz wykupić subskrypcję, kliknij poniżej:</p>
+                <p>Jeśli chcesz wesprzeć, kliknij poniżej:</p>
 
-                <!-- Przycisk do zakupu subskrypcji i przedłużenia obok siebie -->
+                <!-- Przycisk do wsparcia -->
                 <div class="d-flex">
-                    <!-- Przycisk do zakupu subskrypcji -->
-                    <a href="www.patronite.pl/beazzy" class="btn btn-primary me-2">Kup Subskrypcję</a>
+                    <!-- Link bezpośredni do Patronite -->
+                    <a href="https://patronite.pl/Beazzy" class="btn btn-primary me-2" target="_blank">
+                        Wesprzyj na Patronite
+                    </a>
 
-                    <!-- Przycisk do przedłużenia subskrypcji (przekierowanie do Patronite) -->
+                    <!-- Przekierowanie przez serwer -->
                     <form action="{{ url_for('redirect_to_patronite') }}" method="post">
                         <button type="submit" class="btn btn-primary">Przedłuż Subskrypcję</button>
                     </form>
@@ -72,4 +74,6 @@
         </div>
     </div>
 </body>
+</html>
+
 </html>
