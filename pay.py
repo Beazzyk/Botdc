@@ -24,7 +24,7 @@ YOUR_ADMIN_ID = 488756862976524291  # Zmień na swoje Discord ID jako admin (lic
 
 # Funkcja do tworzenia tabeli w bazie (na początku, jeśli nie istnieje)
 def create_tables():
-    """Create the subscriptions table if it doesn't exist."""
+    """Create the subscriptions table if it doesn't exist."""  
     conn = get_db_connection()
     if conn is None:
         return  # Zakończ, jeśli połączenie z bazą nie powiodło się
@@ -146,7 +146,7 @@ def create_checkout_session():
     except Exception as e:
         return jsonify(error=str(e)), 403
 
-@app.route("/payment-success/")
+@app.route("/payment-success/")  # Nowa trasa
 def payment_success():
     """Handle successful payment."""
     user_id = session.get("user_id")
