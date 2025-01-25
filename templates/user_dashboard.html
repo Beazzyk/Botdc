@@ -57,7 +57,17 @@
                 <h5 class="card-title">Twój Panel</h5>
                 <p>Twoja subskrypcja: {{ 'Aktywna' if subscribed else 'Nieaktywna' }}</p>
                 <p>Jeśli chcesz wykupić subskrypcję, kliknij poniżej:</p>
-                <a href="/create-checkout-session" class="btn btn-primary">Kup Subskrypcję</a>
+
+                <!-- Przycisk do zakupu subskrypcji i przedłużenia obok siebie -->
+                <div class="d-flex">
+                    <!-- Przycisk do zakupu subskrypcji -->
+                    <a href="/create-checkout-session" class="btn btn-primary me-2">Kup Subskrypcję</a>
+
+                    <!-- Przycisk do przedłużenia subskrypcji (przekierowanie do Patronite) -->
+                    <form action="{{ url_for('redirect_to_patronite') }}" method="post">
+                        <button type="submit" class="btn btn-primary">Przedłuż Subskrypcję</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

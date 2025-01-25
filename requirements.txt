@@ -2,3 +2,4 @@ Flask
 Flask-Discord
 stripe
 python-dotenv
+psycopg2

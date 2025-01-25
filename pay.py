@@ -1,30 +1,33 @@
 from flask import Flask, request, jsonify, session, redirect, url_for, render_template
 from flask_discord import DiscordOAuth2Session, requires_authorization, Unauthorized
 import stripe
-import sqlite3
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
+from config_db import get_db_connection  # Importujemy funkcję połączenia z bazą danych
 
+# Ładowanie zmiennych środowiskowych z .env
 load_dotenv()
 
 # Flask app initialization
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY")  # SECRET_KEY z pliku .env
-app.config["DISCORD_CLIENT_ID"] = os.getenv("DISCORD_CLIENT_ID")  # Discord Client ID
-app.config["DISCORD_CLIENT_SECRET"] = os.getenv("DISCORD_CLIENT_SECRET")  # Discord Client Secret
-app.config["DISCORD_REDIRECT_URI"] = os.getenv("DISCORD_REDIRECT_URI")  # Redirect URI
-app.config["DISCORD_BOT_TOKEN"] = os.getenv("DISCORD_BOT_TOKEN")  # Discord Bot Token
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")  # Stripe Secret Key
+app.secret_key = os.getenv("SECRET_KEY")
+app.config["DISCORD_CLIENT_ID"] = os.getenv("DISCORD_CLIENT_ID")
+app.config["DISCORD_CLIENT_SECRET"] = os.getenv("DISCORD_CLIENT_SECRET")
+app.config["DISCORD_REDIRECT_URI"] = os.getenv("DISCORD_REDIRECT_URI")
+app.config["DISCORD_BOT_TOKEN"] = os.getenv("DISCORD_BOT_TOKEN")
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 discord = DiscordOAuth2Session(app)
 
-# Database setup
-DATABASE = "subscriptions.db"
+YOUR_ADMIN_ID = 488756862976524291  # Zmień na swoje Discord ID jako admin (liczba)
 
+# Funkcja do tworzenia tabeli w bazie (na początku, jeśli nie istnieje)
 def create_tables():
     """Create the subscriptions table if it doesn't exist."""
-    conn = sqlite3.connect(DATABASE)
+    conn = get_db_connection()
+    if conn is None:
+        return  # Zakończ, jeśli połączenie z bazą nie powiodło się
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -37,11 +40,14 @@ def create_tables():
     conn.commit()
     conn.close()
 
+# Sprawdzenie, czy użytkownik ma aktywną subskrypcję
 def is_subscribed(user_id):
     """Check if a user has an active subscription."""
-    conn = sqlite3.connect(DATABASE)
+    conn = get_db_connection()
+    if conn is None:
+        return False  # Zwróć False, jeśli połączenie z bazą się nie powiodło
     cursor = conn.cursor()
-    cursor.execute("SELECT expires_at FROM subscriptions WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT expires_at FROM subscriptions WHERE user_id = %s", (user_id,))
     result = cursor.fetchone()
     conn.close()
     if result:
@@ -49,17 +55,20 @@ def is_subscribed(user_id):
         return expires_at > datetime.now()
     return False
 
+# Dodanie lub zaktualizowanie subskrypcji użytkownika
 def add_subscription(user_id, days=30):
     """Add or update a user's subscription."""
-    conn = sqlite3.connect(DATABASE)
+    conn = get_db_connection()
+    if conn is None:
+        return  # Zakończ, jeśli połączenie z bazą nie powiodło się
     cursor = conn.cursor()
     expires_at = datetime.now() + timedelta(days=days)
     cursor.execute(
         """
         INSERT INTO subscriptions (user_id, expires_at)
-        VALUES (?, ?)
+        VALUES (%s, %s)
         ON CONFLICT(user_id)
-        DO UPDATE SET expires_at = ?
+        DO UPDATE SET expires_at = %s
         """,
         (user_id, expires_at.strftime("%Y-%m-%d %H:%M:%S"), expires_at.strftime("%Y-%m-%d %H:%M:%S")),
     )
@@ -67,14 +76,6 @@ def add_subscription(user_id, days=30):
     conn.close()
 
 # Routes
-@app.route("/")
-def index():
-    """Homepage with login or subscription options."""
-    user = discord.fetch_user() if "user_id" in session else None
-    if user:
-        return render_template("dashboard.html", user=user, is_admin=user.id == YOUR_ADMIN_ID)
-    return render_template("index.html")
-
 @app.route("/login/")
 def login():
     """Login route to start Discord OAuth2."""
@@ -98,8 +99,6 @@ def logout():
     session.clear()
     return redirect(url_for("index"))
 
-YOUR_ADMIN_ID = 488756862976524291  # Zmień na swoje Discord ID jako admin (liczba)
-
 @app.route("/dashboard/")
 @requires_authorization
 def dashboard():
@@ -107,7 +106,9 @@ def dashboard():
     user = discord.fetch_user()
     if user.id == YOUR_ADMIN_ID:
         # Admin view
-        conn = sqlite3.connect(DATABASE)
+        conn = get_db_connection()
+        if conn is None:
+            return jsonify(error="Błąd połączenia z bazą danych"), 500
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM subscriptions")
         subscriptions = cursor.fetchall()
@@ -128,16 +129,14 @@ def create_checkout_session():
     try:
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=["card"],
-            line_items=[
-                {
-                    "price_data": {
-                        "currency": "usd",
-                        "product_data": {"name": "Subskrypcja Bota Discord"},
-                        "unit_amount": 500,  # Cena w centach (np. $5.00)
-                    },
-                    "quantity": 1,
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": "Subskrypcja Bota Discord"},
+                    "unit_amount": 500,  # Cena w centach (np. $5.00)
                 },
-            ],
+                "quantity": 1,
+            }],
             mode="payment",
             metadata={"user_id": user_id},  # Ułatwia śledzenie płatności
             success_url=url_for("payment_success", _external=True),
@@ -157,11 +156,17 @@ def payment_success():
     add_subscription(user_id)
     return render_template("payment_success.html")
 
+# Nowa trasa, która przekierowuje użytkownika na Patronite
+@app.route("/redirect-to-patronite", methods=["POST"])
+def redirect_to_patronite():
+    patronite_url = "https://patronite.pl/Beazzy"  # Zmień na swój link Patronite
+    return redirect(patronite_url)
+
 # Error handling
 @app.errorhandler(Unauthorized)
 def unauthorized(e):
     return redirect(url_for("login"))
 
 if __name__ == "__main__":
-    create_tables()
+    create_tables()  # Tworzymy tabelę przy starcie aplikacji
     app.run(port=4242, debug=True)
